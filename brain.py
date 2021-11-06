@@ -29,14 +29,15 @@ class Brain:
         self.synapses = 1*(self.synapses>=(1-excitatory_synaptic_density)) - 1*(self.synapses<inhibitory_synaptic_density)
         # self.synapses_{a,b} hold the beta distribution parameters for each synapse that control whether or not they
         # actually activate
-        self.synapses_a = 0.1 * self.synapses.copy()
+        self.synapses_a = 0.1 * (self.synapses != 0)
         self.synapses_b = self.synapses_a.copy()
 
     def get_synaptic_activation(self):
         """activation of the synapses is True if the random number exceeds the synaptic_threshold"""
 
-        # average of beta distributions
-        synaptic_threshold = self.synapses_a / (np.abs(self.synapses_a) + self.synapses_b)
+        # average of beta distributions determines the probability of synaptic activation
+        synaptic_threshold = self.synapses_a / (self.synapses_a + self.synapses_b)
+        synaptic_threshold *= self.synapses  #
         rands = np.random.rand(self.num_neurons, self.num_neurons)
         # if the synapses
         synaptic_activations = 1 * (rands > (1 - synaptic_threshold)) + -1 * (-rands < -(1 + synaptic_threshold))
@@ -67,16 +68,22 @@ class Brain:
         excitatory_synapses = self.synapses > 0
         inhibitory_synapses = self.synapses < 0
 
-        self.synapses_a -= synapse_pre_1_post_0 * inhibitory_synapses
+        # succeeded, so we increment self.synapses_a "neurons that fire together wire together"
+        self.synapses_a += synapse_pre_1_post_0 * inhibitory_synapses
         self.synapses_a += synapse_pre_1_post_1 * excitatory_synapses
+
+        # failed, so we increment self.synapses_b "neurons that DON'T fire together wire apart"
         self.synapses_b += synapse_pre_1_post_0 * excitatory_synapses
         self.synapses_b += synapse_pre_1_post_1 * inhibitory_synapses
 
-    def simulate_brain(self, num_updates=150):
+    def simulate_brain(self, num_updates=150, with_hebbian_learning=True):
         neuron_history = self.neuronal_states
 
         for i in range(num_updates):
-            self.update_neuronal_states()
+            if with_hebbian_learning:
+                self.update_neuronal_states_including_hebbian_learning()
+            else:
+                self.update_neuronal_states()
             neuron_history = np.concatenate([neuron_history, self.neuronal_states], axis=1)
 
         plt.imshow(neuron_history)
