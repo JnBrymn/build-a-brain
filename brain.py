@@ -22,16 +22,25 @@ class Brain:
 
         # synaptic strengths
         assert 0 < excitatory_synaptic_density + inhibitory_synaptic_density <= 1, "excitatory_synaptic_density + inhibitory_synaptic_density must be between 0 and 1"
+
+        # self.synapses serves as a pattern for how neurons are connected and whether the connection is excitatory or
+        # inhibitory
         self.synapses = np.random.rand(self.num_neurons, self.num_neurons)
         self.synapses = 1*(self.synapses>=(1-excitatory_synaptic_density)) - 1*(self.synapses<inhibitory_synaptic_density)
+        # self.synapses_{a,b} hold the beta distribution parameters for each synapse that control whether or not they
+        # actually activate
         self.synapses_a = 0.1 * self.synapses.copy()
         self.synapses_b = self.synapses_a.copy()
 
     def get_synaptic_activation(self):
-        """activation of the synnapses is True if the random number exceeds the synaptic_threshold"""
-        synaptic_threshold = self.synapses_a / (self.synapses_a + self.synapses_b)
-        synaptic_activations = self.synapses * np.random.rand(self.num_neurons, self.num_neurons)
-        synaptic_activations = 1*(synaptic_activations > synaptic_threshold) - 1*(synaptic_activations < -synaptic_threshold)
+        """activation of the synapses is True if the random number exceeds the synaptic_threshold"""
+
+        # average of beta distributions
+        synaptic_threshold = self.synapses_a / (np.abs(self.synapses_a) + self.synapses_b)
+        rands = np.random.rand(self.num_neurons, self.num_neurons)
+        # if the synapses
+        synaptic_activations = 1 * (rands > (1 - synaptic_threshold)) + -1 * (-rands < -(1 + synaptic_threshold))
+
         return synaptic_activations
 
     def update_neuronal_states(self):
@@ -45,6 +54,23 @@ class Brain:
         # decrease the neuronal_threshold for all neurons but reset neuronal_thresholds for neurons that activated
         self.neuronal_thresholds = self.neuronal_thresholds - 1
         self.neuronal_thresholds[self.neuronal_states == 1] = self.neuronal_max_threshold
+
+    def update_neuronal_states_including_hebbian_learning(self):
+        """runs update_neuronal_states but also updates self.synapses_{a,b} appropriately"""
+        pre_neuronal_states = self.neuronal_states.copy()
+        self.update_neuronal_states()
+        post_neuronal_states = self.neuronal_states
+
+        synapse_pre_1_post_0 = np.transpose(1-post_neuronal_states)*pre_neuronal_states
+        synapse_pre_1_post_1 = np.transpose(post_neuronal_states) * pre_neuronal_states
+
+        excitatory_synapses = self.synapses > 0
+        inhibitory_synapses = self.synapses < 0
+
+        self.synapses_a -= synapse_pre_1_post_0 * inhibitory_synapses
+        self.synapses_a += synapse_pre_1_post_1 * excitatory_synapses
+        self.synapses_b += synapse_pre_1_post_0 * excitatory_synapses
+        self.synapses_b += synapse_pre_1_post_1 * inhibitory_synapses
 
     def simulate_brain(self, num_updates=150):
         neuron_history = self.neuronal_states
