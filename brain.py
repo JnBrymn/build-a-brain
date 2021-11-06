@@ -1,5 +1,7 @@
 import numpy as np
 
+import matplotlib.pyplot as plt
+
 
 class Brain:
     def __init__(self, num_neurons, excitatory_synaptic_density, inhibitory_synaptic_density, neuronal_max_threshold, initial_active_neuron_density):
@@ -12,7 +14,6 @@ class Brain:
         :param initial_active_neuron_density: at t=0 what portion of neurons are activated?
         """
         self.num_neurons = num_neurons
-        self.excitatory_synaptic_density = excitatory_synaptic_density
         self.neuronal_max_threshold = neuronal_max_threshold
 
         # neuronal states
@@ -20,15 +21,17 @@ class Brain:
         self.neuronal_thresholds = np.ones([self.num_neurons, 1]) * self.neuronal_max_threshold
 
         # synaptic strengths
-        self.synapses = 1 * (np.random.rand(self.num_neurons, self.num_neurons) < self.excitatory_synaptic_density)
+        assert 0 < excitatory_synaptic_density + inhibitory_synaptic_density <= 1, "excitatory_synaptic_density + inhibitory_synaptic_density must be between 0 and 1"
+        self.synapses = np.random.rand(self.num_neurons, self.num_neurons)
+        self.synapses = 1*(self.synapses>=(1-excitatory_synaptic_density)) - 1*(self.synapses<inhibitory_synaptic_density)
         self.synapses_a = 0.1 * self.synapses.copy()
         self.synapses_b = self.synapses_a.copy()
 
     def get_synaptic_activation(self):
         """activation of the synnapses is True if the random number exceeds the synaptic_threshold"""
         synaptic_threshold = self.synapses_a / (self.synapses_a + self.synapses_b)
-        synaptic_activations = (self.synapses.copy() * np.random.rand(self.num_neurons, self.num_neurons)) > (
-            synaptic_threshold)
+        synaptic_activations = self.synapses * np.random.rand(self.num_neurons, self.num_neurons)
+        synaptic_activations = 1*(synaptic_activations > synaptic_threshold) - 1*(synaptic_activations < -synaptic_threshold)
         return synaptic_activations
 
     def update_neuronal_states(self):
@@ -36,7 +39,7 @@ class Brain:
         whether the resulting activation is above the threshold for activation."""
         synaptic_activations = self.get_synaptic_activation()
         next_neuronal_states = synaptic_activations @ self.neuronal_states
-        next_neuronal_states = 1 * (next_neuronal_states > self.neuronal_thresholds)
+        next_neuronal_states = 1 * (next_neuronal_states >= self.neuronal_thresholds)
         self.neuronal_states = next_neuronal_states
 
         # decrease the neuronal_threshold for all neurons but reset neuronal_thresholds for neurons that activated
