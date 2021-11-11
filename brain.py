@@ -4,21 +4,33 @@ import matplotlib.pyplot as plt
 
 
 class Brain:
-    def __init__(self, num_neurons, excitatory_synaptic_density, inhibitory_synaptic_density, neuronal_max_threshold, initial_active_neuron_density):
+    def __init__(
+            self,
+            num_neurons,
+            excitatory_synaptic_density,
+            inhibitory_synaptic_density,
+            neuronal_threshold,
+            probability_of_random_excitation,
+            initial_active_neuron_density,
+    ):
         """
 
         :param num_neurons:
         :param excitatory_synaptic_density: the portion of synapses that act to excite the downstream neuron
         :param inhibitory_synaptic_density: the portion of synapses that act to inhibit the downstream neuron
-        :param neuronal_max_threshold: if a neuron fires, then immediately after it has this activation threshold, and then thereafter the threshold decreases by 1 each iteration
+        :param neuronal_threshold: if a neuron fires, then immediately after it has this activation threshold, and then thereafter the threshold decreases by 1 each iteration
+            can be a number or a function - if a function then the iteration (0-based) is supplied as the only argument and it must return the neuronal_threshold
+        :param probability_of_random_excitation: 0..1 chance of a neuron randomly firing during a given iteration
+            can be a number or a function - if a function then the iteration (0-based) is supplied as the only argument and it must return the probability
         :param initial_active_neuron_density: at t=0 what portion of neurons are activated?
         """
+        self.iteration = 0
         self.num_neurons = num_neurons
-        self.neuronal_max_threshold = neuronal_max_threshold
+        self.neuronal_threshold = neuronal_threshold
+        self.probability_of_random_excitation = probability_of_random_excitation
 
         # neuronal states
         self.neuronal_states = 1 * (np.random.rand(self.num_neurons, 1) < initial_active_neuron_density)
-        self.neuronal_thresholds = np.ones([self.num_neurons, 1]) * self.neuronal_max_threshold
 
         # synaptic strengths
         assert 0 < excitatory_synaptic_density + inhibitory_synaptic_density <= 1, "excitatory_synaptic_density + inhibitory_synaptic_density must be between 0 and 1"
@@ -47,14 +59,28 @@ class Brain:
     def update_neuronal_states(self):
         """the next neuronal state depends upon what neurons are active currently, what synapses are active, and
         whether the resulting activation is above the threshold for activation."""
+
+        # determine what neurons are activated in next iteration
+        neuronal_threshold = self.neuronal_threshold
+        if callable(neuronal_threshold):
+            neuronal_threshold = neuronal_threshold(self.iteration)
+
         synaptic_activations = self.get_synaptic_activation()
         next_neuronal_states = synaptic_activations @ self.neuronal_states
-        next_neuronal_states = 1 * (next_neuronal_states >= self.neuronal_thresholds)
-        self.neuronal_states = next_neuronal_states
+        next_neuronal_states = next_neuronal_states >= neuronal_threshold
 
-        # decrease the neuronal_threshold for all neurons but reset neuronal_thresholds for neurons that activated
-        self.neuronal_thresholds = self.neuronal_thresholds - 1
-        self.neuronal_thresholds[self.neuronal_states == 1] = self.neuronal_max_threshold
+        # incorporate neurons randomly activated
+        probability_of_random_excitation = self.probability_of_random_excitation
+        if callable(probability_of_random_excitation):
+            probability_of_random_excitation = probability_of_random_excitation(self.iteration)
+
+        next_neuronal_states = np.logical_or(
+            next_neuronal_states,
+            np.random.rand(self.num_neurons, 1) <= probability_of_random_excitation,
+        )
+
+        self.neuronal_states = 1*next_neuronal_states
+        self.iteration += 1
 
     def update_neuronal_states_including_hebbian_learning(self):
         """runs update_neuronal_states but also updates self.synapses_{a,b} appropriately"""

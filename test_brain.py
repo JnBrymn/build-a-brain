@@ -13,7 +13,8 @@ def test_brain_creation():
         num_neurons=num_neurons,
         excitatory_synaptic_density=1,
         inhibitory_synaptic_density=0,
-        neuronal_max_threshold=4,
+        neuronal_threshold=4,
+        probability_of_random_excitation=0.0,
         initial_active_neuron_density=0.5,
     )
 
@@ -24,7 +25,8 @@ def test_brain_creation():
         num_neurons=num_neurons,
         excitatory_synaptic_density=0,
         inhibitory_synaptic_density=1,
-        neuronal_max_threshold=4,
+        neuronal_threshold=4,
+        probability_of_random_excitation=0.0,
         initial_active_neuron_density=0.5,
     )
 
@@ -36,7 +38,8 @@ def test_brain_creation():
             num_neurons=num_neurons,
             excitatory_synaptic_density=0.7,
             inhibitory_synaptic_density=0.7,
-            neuronal_max_threshold=4,
+            neuronal_threshold=4,
+            probability_of_random_excitation=0.0,
             initial_active_neuron_density=0.5,
         )
 
@@ -45,7 +48,8 @@ def test_brain_creation():
             num_neurons=num_neurons,
             excitatory_synaptic_density=0,
             inhibitory_synaptic_density=0,
-            neuronal_max_threshold=4,
+            neuronal_threshold=4,
+            probability_of_random_excitation=0.0,
             initial_active_neuron_density=0.5,
         )
 
@@ -55,7 +59,8 @@ def test_synaptic_activation():
         num_neurons=num_neurons,
         excitatory_synaptic_density=1,
         inhibitory_synaptic_density=0,
-        neuronal_max_threshold=4,
+        neuronal_threshold=4,
+        probability_of_random_excitation=0.0,
         initial_active_neuron_density=0.5,
     )
     total_activations = np.zeros([num_neurons, num_neurons], int)
@@ -69,7 +74,8 @@ def test_synaptic_activation():
         num_neurons=num_neurons,
         excitatory_synaptic_density=0,
         inhibitory_synaptic_density=1,
-        neuronal_max_threshold=4,
+        neuronal_threshold=4,
+        probability_of_random_excitation=0.0,
         initial_active_neuron_density=0.5,
     )
     total_activations = np.zeros([num_neurons, num_neurons], int)
@@ -85,7 +91,8 @@ def test_synaptic_activation_2():
         num_neurons=1,
         excitatory_synaptic_density=1,
         inhibitory_synaptic_density=0,
-        neuronal_max_threshold=4,
+        neuronal_threshold=4,
+        probability_of_random_excitation=0.0,
         initial_active_neuron_density=0.5,
     )
     brain.synapses_a[0,0] = 9
@@ -106,7 +113,8 @@ def test_update_neuronal_states():
         num_neurons=4,
         excitatory_synaptic_density=1,
         inhibitory_synaptic_density=0,
-        neuronal_max_threshold=2,
+        neuronal_threshold=2,
+        probability_of_random_excitation=0.0,
         initial_active_neuron_density=0.5,
     )
 
@@ -118,7 +126,6 @@ def test_update_neuronal_states():
     brain.update_neuronal_states()
 
     assert np.all(brain.neuronal_states == np.array([[1], [1], [0], [0]]))
-    assert np.all(brain.neuronal_thresholds == np.array([[2], [2], [1], [1]]))
 
 
 def test_update_neuronal_states_including_hebbian_learning():
@@ -173,7 +180,8 @@ def test_update_neuronal_states_including_hebbian_learning():
                 num_neurons=4,
                 excitatory_synaptic_density=1,
                 inhibitory_synaptic_density=0,
-                neuronal_max_threshold=2,
+                neuronal_threshold=2,
+                probability_of_random_excitation=0.0,
                 initial_active_neuron_density=0.5,
             )
             brain.neuronal_states[0, 0] = t.pre_neuron
@@ -185,3 +193,10 @@ def test_update_neuronal_states_including_hebbian_learning():
 
         assert brain.synapses_a[0, 0] == t.delta_a, f'Failure for {t} - delta_a was {brain.synapses_a[0, 0]}'
         assert brain.synapses_b[0, 0] == t.delta_b, f'Failure for {t} - delta_b was {brain.synapses_a[0, 0]}'
+
+
+#TODO! test
+# * probability_of_random_excitation
+# * probability_of_random_excitation as a function
+# * neuronal_threshold
+# * neuronal_threshold as a function
