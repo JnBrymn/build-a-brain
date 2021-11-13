@@ -54,6 +54,7 @@ def test_brain_creation():
         )
 
 def test_synaptic_activation():
+    """tests that if all the synapses are excitatory/inhibitory then they will positively/negatively activate."""
     num_neurons = 4
     brain = Brain(
         num_neurons=num_neurons,
@@ -87,6 +88,7 @@ def test_synaptic_activation():
 
 
 def test_synaptic_activation_2():
+    """tests that if the synapse has parameters a and b, that asymptotically, the number of connections will be a/(a+b)"""
     brain = Brain(
         num_neurons=1,
         excitatory_synaptic_density=1,
@@ -109,6 +111,7 @@ def test_synaptic_activation_2():
 
 
 def test_update_neuronal_states():
+    """makes sure that given a known synaptic_activation matrix and initial neuronal state, that the update works as expected"""
     brain = Brain(
         num_neurons=4,
         excitatory_synaptic_density=1,
@@ -126,6 +129,99 @@ def test_update_neuronal_states():
     brain.update_neuronal_states()
 
     assert np.all(brain.neuronal_states == np.array([[1], [1], [0], [0]]))
+
+
+def test_update_neuronal_states__probability_of_random_excitation():
+    """Test that neurons are randomly excited in the ratio specified"""
+    num_neurons = 10
+    probability_of_random_excitation = 0.1
+    brain = Brain(
+        num_neurons=num_neurons,
+        excitatory_synaptic_density=0,
+        inhibitory_synaptic_density=0.000000001,
+        neuronal_threshold=2,
+        probability_of_random_excitation=probability_of_random_excitation,
+        initial_active_neuron_density=0.5,
+    )
+
+    num_iterations = 10000
+    accumulation = np.zeros([num_neurons,1])
+    for i in range(num_iterations):
+        brain.update_neuronal_states()
+        accumulation += brain.neuronal_states
+
+    average_num_excitations = (sum(accumulation / num_iterations) / num_neurons)[0]
+    assert probability_of_random_excitation - .01 < average_num_excitations < probability_of_random_excitation + .01
+
+
+def test_update_neuronal_states__probability_of_random_excitation_func():
+    """Test that probability_of_random_excitation works when specified as function."""
+    num_neurons = 10
+    def probability_of_random_excitation(i):
+        return i
+
+    brain = Brain(
+        num_neurons=num_neurons,
+        excitatory_synaptic_density=0,
+        inhibitory_synaptic_density=0.000000001,
+        neuronal_threshold=2,
+        probability_of_random_excitation=probability_of_random_excitation,
+        initial_active_neuron_density=0.5,
+    )
+
+    brain.update_neuronal_states()
+    assert sum(brain.neuronal_states) == 0
+
+    brain.update_neuronal_states()
+    assert sum(brain.neuronal_states) == num_neurons
+
+
+def test_update_neuronal_states__neuronal_threshold():
+    """Test that neurons only fire if input is above neuronal_threshold"""
+    num_neurons = 3
+    brain = Brain(
+        num_neurons=num_neurons,
+        excitatory_synaptic_density=1,
+        inhibitory_synaptic_density=0,
+        neuronal_threshold=2,
+        probability_of_random_excitation=0,
+        initial_active_neuron_density=0.5,
+    )
+    brain.neuronal_states = np.array([[1],[1],[1]])
+
+    def mock_get_synaptic_activation():
+        return np.array([[1, 1, 1], [0, 1, 1], [0, 0, 1]])
+
+    brain.get_synaptic_activation = mock_get_synaptic_activation
+
+    brain.update_neuronal_states()
+    assert all(brain.neuronal_states == np.array([[1],[1],[0]]))
+
+
+def test_update_neuronal_states__neuronal_threshold_func():
+    """Test that neurons only fire if input is above neuronal_threshold when neuronal_threshold is specified as function"""
+    def neuronal_threshold(i):
+        return i+1
+
+    brain = Brain(
+        num_neurons=1,
+        excitatory_synaptic_density=1,
+        inhibitory_synaptic_density=0,
+        neuronal_threshold=neuronal_threshold,
+        probability_of_random_excitation=0,
+        initial_active_neuron_density=1,
+    )
+
+    def mock_get_synaptic_activation():
+        return np.array([[1]])
+
+    brain.get_synaptic_activation = mock_get_synaptic_activation
+
+    brain.update_neuronal_states()
+    assert all(brain.neuronal_states == 1)
+
+    brain.update_neuronal_states()
+    assert all(brain.neuronal_states == 0)
 
 
 def test_update_neuronal_states_including_hebbian_learning():
@@ -195,8 +291,6 @@ def test_update_neuronal_states_including_hebbian_learning():
         assert brain.synapses_b[0, 0] == t.delta_b, f'Failure for {t} - delta_b was {brain.synapses_a[0, 0]}'
 
 
-#TODO! test
-# * probability_of_random_excitation
-# * probability_of_random_excitation as a function
+#TODO! test (see test_update_neuronal_states__probability_of_random_excitation_{2})
 # * neuronal_threshold
 # * neuronal_threshold as a function
