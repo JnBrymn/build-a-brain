@@ -83,7 +83,7 @@ class Brain:
     def update_neuronal_states_including_hebbian_learning(self):
         """runs update_neuronal_states but also updates self.synapses_{a,b} appropriately"""
         # in the future neuronal states will be continuous, I'm not sure this is a threshold that will always make sense
-        # we should let the user specify this in the __init__
+        # we should let the user specify this in the __init__ #TODO!
         activation_threshold = 0.5
         pre_neuronal_states = csr_matrix(1 * (self.neuronal_states > activation_threshold))
         self.update_neuronal_states()
@@ -101,8 +101,8 @@ class Brain:
         connected_synapses.data = 1
 
         # these synapses have upstream neurons that were active and were connected to the downstream neurons
-        connected_synapse_pre_1_post_0 = synapse_pre_1_post_0 * connected_synapses
-        connected_synapse_pre_1_post_1 = synapse_pre_1_post_1 * connected_synapses
+        connected_synapse_pre_1_post_0 = synapse_pre_1_post_0.multiply(connected_synapses)
+        connected_synapse_pre_1_post_1 = synapse_pre_1_post_1.multiply(connected_synapses)
 
         # if a connected synapse was excitatory, then we increment a so that in the future it will be more excitatory
         self.synapses_a += connected_synapse_pre_1_post_1
