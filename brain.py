@@ -6,27 +6,41 @@ from scipy.sparse import (
     csr_matrix
 )
 
+import utils
+
 class Brain:
     def __init__(
             self,
-            num_neurons,
-            synaptic_density,
-            neuronal_threshold,
-            probability_of_random_excitation,
+            num_neurons=5,
+            synaptic_density=0.2,
+            synapse_func=None,
+            neuron_func=None,
+            random_activation_scale=0.2,
     ):
         """
 
-        :param num_neurons:
+        :param num_neurons: default val is 5
         :param synaptic_density: the portion of synapses that act to excite on inhibit the downstream neuron
-        :param neuronal_threshold: if a neuron fires, then immediately after it has this activation threshold, and then thereafter the threshold decreases by 1 each iteration
-            can be a number or a function - if a function then the iteration (0-based) is supplied as the only argument and it must return the neuronal_threshold
-        :param probability_of_random_excitation: 0..1 chance of a neuron randomly firing during a given iteration
-            can be a number or a function - if a function then the iteration (0-based) is supplied as the only argument and it must return the probability
+            default value is 0.2
+        :param synapse_func: a function that is applied to the raw connection value (0..1) that results is drawn from the synapse's beta distribution
+            default val is utils.SynapseConnectionFunctions.linear which scales the output linearly to -1..1
+        :param neuron_func: a function that is applied to the raw neuronal activation ( SynapseConnection @ NeuronState )
+            default val is utils.NeuronActivationFunctions.make_discrete(0.5) which maps values <=0.5 to 0 and >= 0.5 to 1
+        :param random_activation_scale: the scale of np.random.exponential - random values are drawn from this distribution
+            and added to the neuron stats prior to applying the neuron_func
+            default val is 0.2
         """
         self.iteration = 0
         self.num_neurons = num_neurons
-        self.neuronal_threshold = neuronal_threshold
-        self.probability_of_random_excitation = probability_of_random_excitation
+        if not synapse_func:
+            synapse_func = utils.SynapseConnectionFunctions.linear
+        self.synapse_func = synapse_func
+
+        if not synapse_func:
+            neuron_func = utils.NeuronActivationFunctions.make_discrete(0.5)
+        self.neuron_func = neuron_func
+
+        self.random_activation_scale = random_activation_scale
 
         # neuronal states
         self.neuronal_states = np.zeros([self.num_neurons, 1])
@@ -56,25 +70,12 @@ class Brain:
     def update_neuronal_states(self):
         """the next neuronal state depends upon what neurons are active currently, what synapses are active, and
         whether the resulting activation is above the threshold for activation."""
-
-        # determine what neurons are activated in next iteration
-        neuronal_threshold = self.neuronal_threshold
-        if callable(neuronal_threshold):
-            neuronal_threshold = neuronal_threshold(self.iteration)
+        #TODO! step through and watch this work - make sure the vectorized functions work on sparce vectors
 
         synaptic_activations = self.get_synaptic_connection()
-        next_neuronal_states = synaptic_activations.dot(self.neuronal_states)
-        next_neuronal_states = next_neuronal_states >= neuronal_threshold
-
-        # incorporate neurons randomly activated
-        probability_of_random_excitation = self.probability_of_random_excitation
-        if callable(probability_of_random_excitation):
-            probability_of_random_excitation = probability_of_random_excitation(self.iteration)
-
-        next_neuronal_states = np.logical_or(
-            next_neuronal_states,
-            np.random.rand(self.num_neurons, 1) <= probability_of_random_excitation,
-        )
+        next_neuronal_states = synaptic_activations.dot(self.neuronal_states) \
+                               + np.random.exponential(self.random_activation_scale, [self.num_neurons,1])
+        next_neuronal_states = self.neuron_func(next_neuronal_states)
 
         self.neuronal_states = 1*next_neuronal_states
         self.iteration += 1
