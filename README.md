@@ -12,6 +12,9 @@ John attempts to build a brain using numpy.
     * made both of the above optionally into functions that take iteration number and return a value
   
 ## Dev Ideas
+* Should we do anything for connected_synapse_pre_0_post_* synapses? Maybe we could scale down a and b so that the neuron starts relearning a better connection - but that might add too much randomness
+* The synapse matrix should be sparse, or eventually maybe block dense
+* `probability_of_random_excitation` should be replaced with just adding and arbitrary input INTO each neuron that follows an exponential distribution
 * Can hebbian learning happen in parallel and in batch?
 * There is a way to use a beta distribution for the synapse activation that is continuous and encompasses both inhibitory and excitatory activation
     * You can post filter it to make it exactly -1,0,1 or you can make it continuous

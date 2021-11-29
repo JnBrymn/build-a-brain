@@ -1,106 +1,116 @@
 import numpy as np
 
 import matplotlib.pyplot as plt
+from scipy.sparse import (
+    rand as sparse_rand,
+    csr_matrix
+)
 
+import utils
 
 class Brain:
     def __init__(
             self,
-            num_neurons,
-            excitatory_synaptic_density,
-            inhibitory_synaptic_density,
-            neuronal_threshold,
-            probability_of_random_excitation,
-            initial_active_neuron_density,
+            num_neurons=5,
+            synaptic_density=0.2,
+            synapse_func=None,
+            neuron_func=None,
+            hebbian_activation_threshold=0.5,
+            learning_rate=1.0,
+            random_activation_scale=0.2,
     ):
         """
 
-        :param num_neurons:
-        :param excitatory_synaptic_density: the portion of synapses that act to excite the downstream neuron
-        :param inhibitory_synaptic_density: the portion of synapses that act to inhibit the downstream neuron
-        :param neuronal_threshold: if a neuron fires, then immediately after it has this activation threshold, and then thereafter the threshold decreases by 1 each iteration
-            can be a number or a function - if a function then the iteration (0-based) is supplied as the only argument and it must return the neuronal_threshold
-        :param probability_of_random_excitation: 0..1 chance of a neuron randomly firing during a given iteration
-            can be a number or a function - if a function then the iteration (0-based) is supplied as the only argument and it must return the probability
-        :param initial_active_neuron_density: at t=0 what portion of neurons are activated?
+        :param num_neurons: default val is 5
+        :param synaptic_density: the portion of synapses that act to excite on inhibit the downstream neuron
+            default value is 0.2
+        :param synapse_func: a function that is applied to the raw connection value (0..1) that results is drawn from the synapse's beta distribution
+            default val is utils.SynapseConnectionFunctions.linear which scales the output linearly to -1..1
+        :param neuron_func: a function that is applied to the raw neuronal activation ( SynapseConnection @ NeuronState )
+            default val is utils.NeuronActivationFunctions.make_discrete(0.5) which maps values <=0.5 to 0 and >= 0.5 to 1
+        :param hebbian_activation_threshold: the value above which the neuron is considered to be active for the purpose of hebbian learning
+            default val is 0.5
+        :param learning_rate how fast hebbian learning is applied (the a or b value of the synapse beta distribution is updated by this amount)
+            default val is 1.0
+        :param random_activation_scale: the scale of np.random.exponential - random values are drawn from this distribution
+            and added to the neuron stats prior to applying the neuron_func which tend to make neurons fire randomly
+            default val is 0.2
         """
         self.iteration = 0
         self.num_neurons = num_neurons
-        self.neuronal_threshold = neuronal_threshold
-        self.probability_of_random_excitation = probability_of_random_excitation
+        if not synapse_func:
+            synapse_func = utils.SynapseConnectionFunctions.linear
+        self.synapse_func = synapse_func
+
+        if not neuron_func:
+            neuron_func = utils.NeuronActivationFunctions.make_discrete(0.5)
+        self.neuron_func = neuron_func
+
+        self.hebbian_activation_threshold = hebbian_activation_threshold
+        self.learning_rate = learning_rate
+        self.random_activation_scale = random_activation_scale
 
         # neuronal states
-        self.neuronal_states = 1 * (np.random.rand(self.num_neurons, 1) < initial_active_neuron_density)
+        self.neuronal_states = np.zeros([self.num_neurons, 1])
 
         # synaptic strengths
-        assert 0 < excitatory_synaptic_density + inhibitory_synaptic_density <= 1, "excitatory_synaptic_density + inhibitory_synaptic_density must be between 0 and 1"
+        assert 0 <= synaptic_density <= 1
 
-        # self.synapses serves as a pattern for how neurons are connected and whether the connection is excitatory or
-        # inhibitory
-        self.synapses = np.random.rand(self.num_neurons, self.num_neurons)
-        self.synapses = 1*(self.synapses>=(1-excitatory_synaptic_density)) - 1*(self.synapses<inhibitory_synaptic_density)
         # self.synapses_{a,b} hold the beta distribution parameters for each synapse that control whether or not they
-        # actually activate
-        self.synapses_a = 0.1 * (self.synapses != 0)
+        # actually activate - the more b, the more inhibitory; the more a, the more excitatory
+        self.synapses_a = sparse_rand(num_neurons, num_neurons, density=synaptic_density, format='csr')
+        self.synapses_a.data[:] = 1
         self.synapses_b = self.synapses_a.copy()
 
-    def get_synaptic_activation(self):
-        """activation of the synapses is True if the random number exceeds the synaptic_threshold"""
+    def get_synaptic_connection(self):
+        """\
+        Connection of the synapses is a number between -1 and 1 (-1 inhibitory and 1 excitatory)
+        """
+        synaptic_connections_data = np.random.beta(self.synapses_a.data,self.synapses_b.data)
+        synaptic_connections_data = self.synapse_func(synaptic_connections_data)
+        synaptic_connections = self.synapses_a.copy()
+        synaptic_connections.data = synaptic_connections_data
 
-        # average of beta distributions determines the probability of synaptic activation
-        synaptic_threshold = self.synapses_a / (self.synapses_a + self.synapses_b)
-        synaptic_threshold *= self.synapses  #
-        rands = np.random.rand(self.num_neurons, self.num_neurons)
-        # if the synapses
-        synaptic_activations = 1 * (rands > (1 - synaptic_threshold)) + -1 * (-rands < -(1 + synaptic_threshold))
-
-        return synaptic_activations
+        return synaptic_connections
 
     def update_neuronal_states(self):
         """the next neuronal state depends upon what neurons are active currently, what synapses are active, and
         whether the resulting activation is above the threshold for activation."""
+        #TODO! step through and watch this work - make sure the vectorized functions work on sparce vectors
 
-        # determine what neurons are activated in next iteration
-        neuronal_threshold = self.neuronal_threshold
-        if callable(neuronal_threshold):
-            neuronal_threshold = neuronal_threshold(self.iteration)
-
-        synaptic_activations = self.get_synaptic_activation()
-        next_neuronal_states = synaptic_activations @ self.neuronal_states
-        next_neuronal_states = next_neuronal_states >= neuronal_threshold
-
-        # incorporate neurons randomly activated
-        probability_of_random_excitation = self.probability_of_random_excitation
-        if callable(probability_of_random_excitation):
-            probability_of_random_excitation = probability_of_random_excitation(self.iteration)
-
-        next_neuronal_states = np.logical_or(
-            next_neuronal_states,
-            np.random.rand(self.num_neurons, 1) <= probability_of_random_excitation,
-        )
+        synaptic_activations = self.get_synaptic_connection()
+        next_neuronal_states = synaptic_activations.dot(self.neuronal_states) \
+                               + np.random.exponential(self.random_activation_scale, [self.num_neurons,1])
+        next_neuronal_states = self.neuron_func(next_neuronal_states)
 
         self.neuronal_states = 1*next_neuronal_states
         self.iteration += 1
 
     def update_neuronal_states_including_hebbian_learning(self):
         """runs update_neuronal_states but also updates self.synapses_{a,b} appropriately"""
-        pre_neuronal_states = self.neuronal_states.copy()
+        pre_neuronal_states = csr_matrix(1 * (self.neuronal_states > self.hebbian_activation_threshold))
         self.update_neuronal_states()
-        post_neuronal_states = self.neuronal_states
+        post_neuronal_states = 1 * (self.neuronal_states > self.hebbian_activation_threshold)
+        post_neuronal_states__on = csr_matrix(post_neuronal_states)
+        post_neuronal_states__off = csr_matrix(1-post_neuronal_states)
 
-        synapse_pre_1_post_0 = np.transpose(1-post_neuronal_states)*pre_neuronal_states
-        synapse_pre_1_post_1 = np.transpose(post_neuronal_states) * pre_neuronal_states
+        synapse_pre_1_post_0 = post_neuronal_states__off.dot(pre_neuronal_states.T)
+        synapse_pre_1_post_1 = post_neuronal_states__on.dot(pre_neuronal_states.T)
 
-        excitatory_synapses = self.synapses > 0
-        inhibitory_synapses = self.synapses < 0
+        # synapses that are connected in any way, inhibitory, excitatory, strong, or weak
+        # TODO for efficiency sake, if the connectivity never changed, then we could create the connected_synapses in
+        #  the __init__.
+        connected_synapses = self.synapses_a.copy()
+        connected_synapses.data[:] = 1
 
-        # succeeded, so we increment self.synapses_a "neurons that fire together wire together"
-        self.synapses_a += synapse_pre_1_post_0 * inhibitory_synapses
-        self.synapses_a += synapse_pre_1_post_1 * excitatory_synapses
+        # these synapses have upstream neurons that were active and were connected to the downstream neurons
+        connected_synapse_pre_1_post_0 = synapse_pre_1_post_0.multiply(connected_synapses)
+        connected_synapse_pre_1_post_1 = synapse_pre_1_post_1.multiply(connected_synapses)
 
-        # failed, so we increment self.synapses_b "neurons that DON'T fire together wire apart"
-        self.synapses_b += synapse_pre_1_post_0 * excitatory_synapses
-        self.synapses_b += synapse_pre_1_post_1 * inhibitory_synapses
+        # if a connected synapse was excitatory, then we increment a so that in the future it will be more excitatory
+        self.synapses_a += connected_synapse_pre_1_post_1 * self.learning_rate
+        # if a connected synapse was inhibitory, then we increment b so that in the future it will be more inhibitory
+        self.synapses_b += connected_synapse_pre_1_post_0 * self.learning_rate
 
     def simulate_brain(self, num_updates=150, with_hebbian_learning=True):
         neuron_history = self.neuronal_states
