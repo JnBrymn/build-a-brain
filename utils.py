@@ -81,12 +81,12 @@ class NeuronActivationFunctions:
     """\
     NeuronActivationFunctions are applied element-wise to the output of SynapseConnect@NeuronActivations such that:
 
-    `NextNeuronActivations - NeuronActivationFunctions(SynapseConnect @ PreviousNeuronActivations)`
+    `NextNeuronActivations = NeuronActivationFunctions(SynapseConnect @ PreviousNeuronActivations)`
 
     NeuronActivationFunctions have a domain and range of all real numbers. The mapping must monotonically increase.
     """
     @classmethod
-    def make_linear(cls, domain_min, domain_max, range_min, range_max):
+    def make_linear(cls, domain_min=0, domain_max=1, range_min=0, range_max=1):
         assert domain_min < domain_max
         assert range_min < range_max
 
@@ -102,7 +102,7 @@ class NeuronActivationFunctions:
         return linear
 
     @classmethod
-    def make_discrete(cls, threshold, range_min=0, range_max=1):
+    def make_discrete(cls, threshold=0.5, range_min=0, range_max=1):
         assert range_min < range_max
 
         @np.vectorize
