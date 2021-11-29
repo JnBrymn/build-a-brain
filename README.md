@@ -10,6 +10,9 @@ John attempts to build a brain using numpy.
     * activation threshold a constant across all neurons rather than having it decrease after a neuron isn't being fire
     * added random excitation parameter so that neurons just sometimes fire on their own
     * made both of the above optionally into functions that take iteration number and return a value
+* v0.3.0
+    * single synapse type which handles both excitation and inhibition
+    * introduced synaptic connection function and neuron activation function
   
 ## Dev Ideas
 * Should we do anything for connected_synapse_pre_0_post_* synapses? Maybe we could scale down a and b so that the neuron starts relearning a better connection - but that might add too much randomness
